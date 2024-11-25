@@ -1,0 +1,9 @@
+build
+.vscode/settings.json
+managed_components
+dependencies.lock
+sdkconfig.old
+out
+__*
+.cache
+wifi_credentials.h
