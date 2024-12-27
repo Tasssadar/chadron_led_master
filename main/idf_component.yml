@@ -2,7 +2,7 @@ dependencies:
   idf: ">=5.3.0"
   SmartLeds:
     git: https://github.com/RoboticsBrno/SmartLeds.git
-    version: v3.1.4
+    version: 3bbc35f3fd3d17a209cd21c23a937b62029fd244
   Esp32-RBGridUI:
     git: https://github.com/RoboticsBrno/Esp32-RBGridUI.git
-    version: v5.3.2
+    version: v5.3.3

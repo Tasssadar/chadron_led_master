@@ -8,6 +8,8 @@
 #include <map>
 #include <set>
 
+#include "fastled.h"
+
 #define GRIDUI_LAYOUT_DEFINITION
 #include "layout.hpp"
 
@@ -15,7 +17,16 @@
 
 using namespace gridui;
 
-static constexpr const int LED_COUNT = 5*30;
+static constexpr const int CNT_FRONT_BOTTOM = 15;
+static constexpr const int CNT_FRONT_TOP = 15;
+static constexpr const int CNT_FRONT = CNT_FRONT_BOTTOM + CNT_FRONT_TOP;
+static constexpr const int CNT_BACK_LEFT = 10;
+static constexpr const int CNT_BACK_BOTTOM = 19;
+static constexpr const int CNT_BACK_RIGHT = 9;
+static constexpr const int CNT_BACK_TOP = 19;
+static constexpr const int CNT_BACK = CNT_BACK_LEFT + CNT_BACK_BOTTOM + CNT_BACK_RIGHT + CNT_BACK_TOP;
+
+static constexpr const int LED_COUNT = CNT_FRONT + CNT_BACK;
 
 static constexpr const int PIN_CLK = 12;
 static constexpr const int PIN_DATA = 11;
@@ -274,6 +285,23 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
         slider->onChanged(onSaveSliderChanged);
     }
 
+    uint8_t enable = 1;
+    nvs_get_u8(gNvs, "eb", &enable);
+    builder.enableBack.checked(enable);
+    builder.enableBack.onChanged([](Checkbox &b) {
+        ESP_ERROR_CHECK(nvs_set_u8(gNvs, "eb", b.checked()));
+        scheduleNvsSave();
+    });
+
+    enable = 1;
+    nvs_get_u8(gNvs, "ef", &enable);
+    builder.enableFront.checked(enable);
+    builder.enableFront.onChanged([](Checkbox &b) {
+        ESP_ERROR_CHECK(nvs_set_u8(gNvs, "ef", b.checked()));
+        scheduleNvsSave();
+    });
+    
+
     builder.commit();
 
     displayWidgetsForMode();
@@ -291,7 +319,7 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
 static TickType_t applySub(Apa102& leds) {
     switch(gSub) {
         case SUB_NONE:
-            return pdMS_TO_TICKS(50);
+            return pdMS_TO_TICKS(1);
         case SUB_BREATHE: {
             static float mult = 0.5f;
             static float delta = 0.005f;
@@ -318,7 +346,7 @@ static TickType_t applySub(Apa102& leds) {
             static int16_t offset = 0;
             const float size = Layout.waveSize.value();
             const int16_t segment = size*2;
-            const int16_t min = Layout.breatheMinBrightness.value();
+            const int16_t min = Layout.waveMinBrightness.value();
             const auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
             for(int16_t i = 0; i < LED_COUNT; ++i) {
                 float posInSegment = float((i + offset)%segment) / size;
@@ -358,7 +386,10 @@ extern "C" void app_main(void)
     UI.begin("VojtechBocek", "Chadron LED master");
     buildWidgets(Layout.begin());
 
-    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 10*1000*1000);
+    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 50*1000);
+    for(size_t i = 0; i < LED_COUNT; ++i) {
+        leds[i] = Apa102::ApaRgb();
+    }
     leds.show();
 
     uint8_t rainbowOffset = 0;
@@ -389,7 +420,7 @@ extern "C" void app_main(void)
             const int step = Layout.rainbowLength.value();
             for(int i = 0; i < LED_COUNT; ++i) {
                 leds[i].v = brightness;
-                leds[i] = Hsv(rainbowOffset + i*step, 255, 255);
+                hsv2rgb_rainbow(Hsv(rainbowOffset + i*step, 255, 255), leds[i]);
             }
             rainbowOffset += step;
             delay = pdMS_TO_TICKS(Layout.rainbowSpeed.value());
@@ -399,9 +430,20 @@ extern "C" void app_main(void)
             break;
         }
 
+        if(!Layout.enableFront.checked()) {
+            for(size_t i = 0; i < CNT_FRONT; ++i) {
+                leds[i] = Apa102::ApaRgb();
+            }
+        }
+        if(!Layout.enableBack.checked()) {
+            for(size_t i = CNT_FRONT; i < CNT_FRONT+CNT_BACK; ++i) {
+                leds[i] = Apa102::ApaRgb();
+            }
+        }
+
         leds.wait();
-        leds.show();
         vTaskDelay(delay);
+        leds.show();
 
         if(gNvsNextSave != 0 && xTaskGetTickCount() > gNvsNextSave) {
             nvs_commit(gNvs);
