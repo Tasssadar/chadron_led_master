@@ -17,7 +17,7 @@
 
 using namespace gridui;
 
-static constexpr const int CNT_FRONT_BOTTOM = 15;
+static constexpr const int CNT_FRONT_BOTTOM = 16;
 static constexpr const int CNT_FRONT_TOP = 15;
 static constexpr const int CNT_FRONT = CNT_FRONT_BOTTOM + CNT_FRONT_TOP;
 static constexpr const int CNT_BACK_LEFT = 10;
@@ -375,6 +375,17 @@ static TickType_t applySub(Apa102& leds) {
 extern "C" void app_main(void)
 {
     printf("Starting\n");
+
+    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 8*1000);
+    for(size_t i = 0; i < LED_COUNT; ++i) {
+        leds[i] = Apa102::ApaRgb();
+    }
+    leds.show();
+    for(size_t i = 0; i < LED_COUNT; ++i) {
+        leds[i] = Apa102::ApaRgb();
+    }
+    leds.wait();
+    leds.show();
     
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(nvs_open("chadron", NVS_READWRITE, &gNvs));
@@ -386,13 +397,10 @@ extern "C" void app_main(void)
     UI.begin("VojtechBocek", "Chadron LED master");
     buildWidgets(Layout.begin());
 
-    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 50*1000);
-    for(size_t i = 0; i < LED_COUNT; ++i) {
-        leds[i] = Apa102::ApaRgb();
-    }
-    leds.show();
-
     uint8_t rainbowOffset = 0;
+    auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
+    bool wait_for_show = true;
+    uint8_t stabilize_shows = 3;
     while(true) {
         const uint8_t brightness = 0xE0 | uint8_t(Layout.brightness.value());
 
@@ -441,9 +449,29 @@ extern "C" void app_main(void)
             }
         }
 
-        leds.wait();
+        auto start = xTaskGetTickCount();
+        if(wait_for_show) {
+            leds.wait();
+            wait_for_show = false;
+        }
+
+        auto waitDuration = xTaskGetTickCount() - start;
+        if(waitDuration < delay) {
+            delay -= waitDuration;
+        } else {
+            delay = 0;
+        }
         vTaskDelay(delay);
-        leds.show();
+
+        if(stabilize_shows > 0 || memcmp(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb)) != 0) {
+            memcpy(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb));
+            leds.show();
+            wait_for_show = true;
+
+            if(stabilize_shows > 0) {
+                --stabilize_shows;
+            }
+        }
 
         if(gNvsNextSave != 0 && xTaskGetTickCount() > gNvsNextSave) {
             nvs_commit(gNvs);
