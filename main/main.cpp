@@ -318,8 +318,6 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
 
 static TickType_t applySub(Apa102& leds) {
     switch(gSub) {
-        case SUB_NONE:
-            return pdMS_TO_TICKS(1);
         case SUB_BREATHE: {
             static float mult = 0.5f;
             static float delta = 0.005f;
@@ -368,15 +366,16 @@ static TickType_t applySub(Apa102& leds) {
             }
             return pdMS_TO_TICKS(Layout.waveDelay.value());
         }
+    default:
+        return pdMS_TO_TICKS(100);
     }
-    return pdMS_TO_TICKS(50);
 }
 
 extern "C" void app_main(void)
 {
     printf("Starting\n");
 
-    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 8*1000);
+    Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 2'000'000);
     for(size_t i = 0; i < LED_COUNT; ++i) {
         leds[i] = Apa102::ApaRgb();
     }
