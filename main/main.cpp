@@ -175,6 +175,12 @@ static std::vector<builder::Slider*> slidersToSaveBuilder(const builder::_Layout
     };
 }
 
+static void stretchChannelsEvenly(Apa102::ApaRgb& led, uint8_t max) {
+    led.r = (uint16_t(led.r)*max) >> 8;
+    led.g = (uint16_t(led.g)*max) >> 8;
+    led.b = (uint16_t(led.b)*max) >> 8;
+}
+
 static void displaySubWidgets() {
     auto activeSubs = subsPerMode.find(gMode);
     if(activeSubs != subsPerMode.end()) {
@@ -416,6 +422,51 @@ static TickType_t applySub(Apa102& leds) {
     }
 }
 
+static bool applyStartupAnim(Apa102& leds) {
+    static constexpr const float duration = pdMS_TO_TICKS(400);
+    static const TickType_t start = xTaskGetTickCount();
+    TickType_t now = xTaskGetTickCount();
+
+    const float c = float(now - start) / duration;
+    if(c >= 1.f) {
+        return false;
+    }
+
+    float posC;
+
+    static const constexpr size_t OFF_BACK_LEFT = CNT_FRONT+CNT_BACK_LEFT;
+    static const constexpr size_t OFF_BACK_BOTTOM = OFF_BACK_LEFT+CNT_BACK_BOTTOM;
+    static const constexpr size_t OFF_BACK_RIGHT = OFF_BACK_BOTTOM+CNT_BACK_RIGHT;
+
+    for(size_t i = 0; i < LED_COUNT; ++i) {
+        if(i <= CNT_FRONT_BOTTOM/2) {
+            posC = float(i)/(CNT_FRONT_BOTTOM/2);
+        } else if(i < CNT_FRONT_BOTTOM) {
+            posC = float(CNT_FRONT_BOTTOM-i)/(CNT_FRONT_BOTTOM/2);
+        } else if(i < CNT_FRONT_BOTTOM+CNT_FRONT_TOP/2) {
+            posC = float(i-CNT_FRONT_BOTTOM)/(CNT_FRONT_TOP/2);
+        } else if(i < CNT_FRONT) {
+            posC = float(CNT_FRONT_TOP - (i-CNT_FRONT_BOTTOM))/(CNT_FRONT_TOP/2);
+        } else if(i < OFF_BACK_LEFT) {
+            posC = 0.f;
+        } else if(i <= OFF_BACK_LEFT+CNT_BACK_BOTTOM/2) {
+            posC = float(i-OFF_BACK_LEFT)/(CNT_BACK_BOTTOM/2);
+        } else if(i < OFF_BACK_LEFT+CNT_BACK_BOTTOM) {
+            posC = float(CNT_BACK_BOTTOM - (i-OFF_BACK_LEFT))/(CNT_BACK_BOTTOM/2);
+        } else if(i < OFF_BACK_BOTTOM+CNT_BACK_RIGHT) {
+            posC = 0.f;
+        } else if(i <= OFF_BACK_RIGHT+CNT_BACK_TOP/2) {
+            posC = float(i-OFF_BACK_RIGHT)/(CNT_BACK_TOP/2);
+        } else if(i < OFF_BACK_RIGHT+CNT_BACK_TOP) {
+            posC = float(CNT_BACK_TOP - (i-OFF_BACK_RIGHT))/(CNT_BACK_TOP/2);
+        }
+
+        const int cur = ((posC - 1) + c*2) * 255;
+        stretchChannelsEvenly(leds[i], std::max(0, std::min(255, cur)));
+    }
+    return true;
+}
+
 extern "C" void app_main(void)
 {
     printf("Starting\n");
@@ -424,11 +475,6 @@ extern "C" void app_main(void)
     for(size_t i = 0; i < LED_COUNT; ++i) {
         leds[i] = Apa102::ApaRgb();
     }
-    leds.show();
-    for(size_t i = 0; i < LED_COUNT; ++i) {
-        leds[i] = Apa102::ApaRgb();
-    }
-    leds.wait();
     leds.show();
 
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -444,6 +490,7 @@ extern "C" void app_main(void)
     float rainbowOffset = 0;
     auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
     bool wait_for_show = true;
+    bool startup_done = false;
     while(true) {
         const uint8_t brightness = 0xE0 | uint8_t(Layout.brightness.value());
 
@@ -492,6 +539,16 @@ extern "C" void app_main(void)
         if(!Layout.enableBack.checked()) {
             for(size_t i = CNT_FRONT; i < CNT_FRONT+CNT_BACK; ++i) {
                 leds[i] = Apa102::ApaRgb();
+            }
+        }
+
+        if(!startup_done) {
+            if(applyStartupAnim(leds)) {
+                if(delay > pdMS_TO_TICKS(50)) {
+                    delay = pdMS_TO_TICKS(50);
+                }
+            } else {
+                startup_done = true;
             }
         }
 
