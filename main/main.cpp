@@ -7,6 +7,7 @@
 #include <array>
 #include <map>
 #include <set>
+#include <cmath>
 
 #include "fastled.h"
 
@@ -33,6 +34,16 @@ static constexpr const int PIN_DATA = 11;
 
 static nvs_handle_t gNvs;
 static TickType_t gNvsNextSave = 0;
+
+struct ColorPreset {
+    const char * const name;
+    Rgb color;
+};
+
+static const std::array COLOR_PRESETS = {
+    ColorPreset{ "Warm", Rgb(255,125, 17) },
+    ColorPreset{ "Yellow", Rgb(255, 115, 0) },
+};
 
 enum Mode : uint8_t {
     MODE_RGB,
@@ -72,6 +83,8 @@ static Widget* const widgetsModeRgb[] = {
     &Layout.rgbBtit,
     nullptr,
 };
+
+static std::vector<Button> rgbPresetWidgets;
 
 static Widget* const widgetsModeHsv[] = {
     &Layout.hsvH,
@@ -211,6 +224,14 @@ static void displayWidgetsForMode() {
         }
     }
 
+    for(auto& btn : rgbPresetWidgets) {
+        if(gMode == MODE_RGB) {
+            btn.setCss("visibility", "");
+        } else {
+            btn.setCss("visibility", "hidden");
+        }
+    }
+
     displaySubWidgets();
 }
 
@@ -258,6 +279,29 @@ static void onSaveSliderChanged(Slider& s) {
     scheduleNvsSave();
 }
 
+static void buildColorPresets(builder::_LayoutBuilder builder) {
+    const float layoutWidth = 12 - 1; // minus padding
+    float x = 0.5f;
+    const float y = 4;
+    const float btnHeight = 0.5f;
+    const float btnWidth = ((layoutWidth - (float(COLOR_PRESETS.size()-1)*0.5f)) / COLOR_PRESETS.size());
+    
+    for(const auto& preset : COLOR_PRESETS) {
+        auto& btn = UI.button(x, y, btnWidth, btnHeight);
+        btn.text(preset.name);
+
+        const auto color = preset.color;
+        btn.onPress([color](Button&) {
+            Layout.rgbR.setValue(color.r);
+            Layout.rgbG.setValue(color.g);
+            Layout.rgbB.setValue(color.b);
+        });
+
+        rgbPresetWidgets.emplace_back(btn.finish());
+        x += btnWidth + 0.5f;
+    }
+}
+
 static void buildWidgets(builder::_LayoutBuilder builder) {
     char buff[8];
     std::array modeSwitchers {
@@ -301,6 +345,7 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
         scheduleNvsSave();
     });
     
+    buildColorPresets(builder);
 
     builder.commit();
 
@@ -341,13 +386,13 @@ static TickType_t applySub(Apa102& leds) {
             return pdMS_TO_TICKS(Layout.breatheDelay.value());
         }
         case SUB_WAVE: {
-            static int16_t offset = 0;
+            static float offset = 0;
             const float size = Layout.waveSize.value();
-            const int16_t segment = size*2;
+            const float segment = size*2;
             const int16_t min = Layout.waveMinBrightness.value();
             const auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
             for(int16_t i = 0; i < LED_COUNT; ++i) {
-                float posInSegment = float((i + offset)%segment) / size;
+                float posInSegment = std::fmod((float(i) + offset), segment) / size;
                 if(posInSegment > 1.f) {
                     posInSegment = 2.f - posInSegment;
                 }
@@ -360,11 +405,11 @@ static TickType_t applySub(Apa102& leds) {
                 leds[i] = curRgb;
             }
 
-            offset += 1;
+            offset += 0.01;
             if(offset >= segment) {
                 offset = 0;
             }
-            return pdMS_TO_TICKS(Layout.waveDelay.value());
+            return pdMS_TO_TICKS(Layout.waveDelay.value()/100);
         }
     default:
         return pdMS_TO_TICKS(100);
