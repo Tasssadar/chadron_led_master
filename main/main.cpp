@@ -430,7 +430,7 @@ extern "C" void app_main(void)
     }
     leds.wait();
     leds.show();
-    
+
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(nvs_open("chadron", NVS_READWRITE, &gNvs));
 
@@ -444,7 +444,6 @@ extern "C" void app_main(void)
     float rainbowOffset = 0;
     auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
     bool wait_for_show = true;
-    uint8_t stabilize_shows = 3;
     while(true) {
         const uint8_t brightness = 0xE0 | uint8_t(Layout.brightness.value());
 
@@ -510,14 +509,10 @@ extern "C" void app_main(void)
         }
         vTaskDelay(delay);
 
-        if(stabilize_shows > 0 || memcmp(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb)) != 0) {
+        if(memcmp(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb)) != 0) {
             memcpy(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb));
             leds.show();
             wait_for_show = true;
-
-            if(stabilize_shows > 0) {
-                --stabilize_shows;
-            }
         }
 
         if(gNvsNextSave != 0 && xTaskGetTickCount() > gNvsNextSave) {
