@@ -441,7 +441,7 @@ extern "C" void app_main(void)
     UI.begin("VojtechBocek", "Chadron LED master");
     buildWidgets(Layout.begin());
 
-    uint8_t rainbowOffset = 0;
+    float rainbowOffset = 0;
     auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
     bool wait_for_show = true;
     uint8_t stabilize_shows = 3;
@@ -474,8 +474,11 @@ extern "C" void app_main(void)
                 leds[i].v = brightness;
                 hsv2rgb_rainbow(Hsv(rainbowOffset + i*step, 255, 255), leds[i]);
             }
-            rainbowOffset += step;
-            delay = pdMS_TO_TICKS(Layout.rainbowSpeed.value());
+            rainbowOffset += float(step)/100.f;
+            if(rainbowOffset >= 255.f) {
+                rainbowOffset = 0.f;
+            }
+            delay = pdMS_TO_TICKS(Layout.rainbowSpeed.value()/100.f);
             break;
         }
         default:
