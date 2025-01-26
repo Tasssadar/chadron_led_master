@@ -1,20 +1,23 @@
 #include <stdio.h>
 #include <inttypes.h>
-#include "rbwifi.h"
-#include "gridui.h"
-#include "nvs_flash.h"
-#include "SmartLeds.h"
 #include <array>
 #include <map>
 #include <set>
 #include <cmath>
+#include <thread>
+
+
+#include "rbwifi.h"
+#include "gridui.h"
+#include "esp_netif.h"
+#include "nvs_flash.h"
+#include "SmartLeds.h"
 
 #include "fastled.h"
+#include "wifi_credentials.h"
 
 #define GRIDUI_LAYOUT_DEFINITION
 #include "layout.hpp"
-
-#include "wifi_credentials.h"
 
 using namespace gridui;
 
@@ -423,7 +426,7 @@ static TickType_t applySub(Apa102& leds) {
 }
 
 static bool applyStartupAnim(Apa102& leds) {
-    static constexpr const float duration = pdMS_TO_TICKS(400);
+    static constexpr const float duration = pdMS_TO_TICKS(600);
     static const TickType_t start = xTaskGetTickCount();
     TickType_t now = xTaskGetTickCount();
 
@@ -467,15 +470,18 @@ static bool applyStartupAnim(Apa102& leds) {
     return true;
 }
 
+static void wifiConnectTask(void *) {
+    rb::WiFi::connect(WIFI_NAME, WIFI_PASS);
+    vTaskDelete(NULL);
+}
+
 extern "C" void app_main(void)
 {
-    printf("Starting\n");
-
     Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 2'000'000);
-    for(size_t i = 0; i < LED_COUNT; ++i) {
+    /*for(size_t i = 0; i < LED_COUNT; ++i) {
         leds[i] = Apa102::ApaRgb();
     }
-    leds.show();
+    leds.show();*/
 
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(nvs_open("chadron", NVS_READWRITE, &gNvs));
@@ -483,9 +489,11 @@ extern "C" void app_main(void)
     nvs_get_u8(gNvs, "mode", (uint8_t*)&gMode);
     nvs_get_u8(gNvs, "sub", (uint8_t*)&gSub);
 
-    rb::WiFi::connect(WIFI_NAME, WIFI_PASS);
+    esp_netif_init();
     UI.begin("VojtechBocek", "Chadron LED master");
     buildWidgets(Layout.begin());
+
+    xTaskCreatePinnedToCore(wifiConnectTask, "", 4096, NULL, 1, NULL, 1);
 
     float rainbowOffset = 0;
     auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
