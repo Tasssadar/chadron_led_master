@@ -1,17 +1,16 @@
-#include <stdio.h>
-#include <inttypes.h>
 #include <array>
+#include <cmath>
+#include <inttypes.h>
 #include <map>
 #include <set>
-#include <cmath>
+#include <stdio.h>
 #include <thread>
 
-
-#include "rbwifi.h"
-#include "gridui.h"
-#include "esp_netif.h"
-#include "nvs_flash.h"
 #include "SmartLeds.h"
+#include "esp_netif.h"
+#include "gridui.h"
+#include "nvs_flash.h"
+#include "rbwifi.h"
 
 #include "fastled.h"
 #include "wifi_credentials.h"
@@ -39,13 +38,13 @@ static nvs_handle_t gNvs;
 static TickType_t gNvsNextSave = 0;
 
 struct ColorPreset {
-    const char * const name;
+    const char* const name;
     Rgb color;
 };
 
 static const std::array COLOR_PRESETS = {
-    ColorPreset{ "Warm", Rgb(255,125, 17) },
-    ColorPreset{ "Yellow", Rgb(255, 115, 0) },
+    ColorPreset { "Warm", Rgb(255, 125, 17) },
+    ColorPreset { "Yellow", Rgb(255, 115, 0) },
 };
 
 enum Mode : uint8_t {
@@ -108,7 +107,6 @@ static Widget* const widgetsModeRainbow[] = {
     nullptr,
 };
 
-
 static Widget* const widgetsSubBreathe[] = {
     &Layout.breatheDelay,
     &Layout.breatheDelayTit,
@@ -127,7 +125,7 @@ static Widget* const widgetsSubWave[] = {
     nullptr,
 };
 
-static const std::array<Widget* const *, MODE_MAX> widgetsPerMode {
+static const std::array<Widget* const*, MODE_MAX> widgetsPerMode {
     widgetsModeRgb,
     widgetsModeHsv,
     widgetsModeRainbow,
@@ -138,7 +136,7 @@ static const std::map<Mode, std::set<SubMode>> subsPerMode {
     { MODE_HSV, { SUB_BREATHE, SUB_WAVE } },
 };
 
-static const std::map<SubMode, Widget* const *> widgetsPerSub {
+static const std::map<SubMode, Widget* const*> widgetsPerSub {
     { SUB_BREATHE, widgetsSubBreathe },
     { SUB_WAVE, widgetsSubWave },
 };
@@ -180,41 +178,41 @@ static std::vector<builder::Slider*> slidersToSaveBuilder(const builder::_Layout
 }
 
 static void stretchChannelsEvenly(Apa102::ApaRgb& led, uint8_t max) {
-    led.r = (uint16_t(led.r)*max) >> 8;
-    led.g = (uint16_t(led.g)*max) >> 8;
-    led.b = (uint16_t(led.b)*max) >> 8;
+    led.r = (uint16_t(led.r) * max) >> 8;
+    led.g = (uint16_t(led.g) * max) >> 8;
+    led.b = (uint16_t(led.b) * max) >> 8;
 }
 
 static void displaySubWidgets() {
     auto activeSubs = subsPerMode.find(gMode);
-    if(activeSubs != subsPerMode.end()) {
-        for(auto sub : activeSubs->second) {
+    if (activeSubs != subsPerMode.end()) {
+        for (auto sub : activeSubs->second) {
             auto widgets = widgetsPerSub.at(sub);
-            for(size_t i = 0; widgets[i] != nullptr; ++i) {
+            for (size_t i = 0; widgets[i] != nullptr; ++i) {
                 auto w = widgets[i];
-                if(sub == gSub) {
+                if (sub == gSub) {
                     w->setCss("visibility", "");
                 } else {
                     w->setCss("visibility", "hidden");
                 }
             }
         }
-        for(auto cb : subCheckboxes) {
+        for (auto cb : subCheckboxes) {
             cb->setCss("visibility", "");
         }
     } else {
-        for(auto cb : subCheckboxes) {
+        for (auto cb : subCheckboxes) {
             cb->setCss("visibility", "hidden");
         }
     }
 
-    for(auto itr : widgetsPerSub) {
-        if(activeSubs != subsPerMode.end() && activeSubs->second.contains(itr.first)) {
+    for (auto itr : widgetsPerSub) {
+        if (activeSubs != subsPerMode.end() && activeSubs->second.contains(itr.first)) {
             continue;
         }
 
-        auto widgets =itr.second;
-        for(size_t i = 0; widgets[i] != nullptr; ++i) {
+        auto widgets = itr.second;
+        for (size_t i = 0; widgets[i] != nullptr; ++i) {
             auto w = widgets[i];
             w->setCss("visibility", "hidden");
         }
@@ -222,11 +220,11 @@ static void displaySubWidgets() {
 }
 
 static void displayWidgetsForMode() {
-    for(size_t mode = 0; mode < widgetsPerMode.size(); ++mode) {
+    for (size_t mode = 0; mode < widgetsPerMode.size(); ++mode) {
         auto widgets = widgetsPerMode[mode];
-        for(size_t i = 0; widgets[i] != nullptr; ++i) {
+        for (size_t i = 0; widgets[i] != nullptr; ++i) {
             auto w = widgets[i];
-            if(mode == gMode) {
+            if (mode == gMode) {
                 w->setCss("visibility", "");
             } else {
                 w->setCss("visibility", "hidden");
@@ -234,8 +232,8 @@ static void displayWidgetsForMode() {
         }
     }
 
-    for(auto& btn : rgbPresetWidgets) {
-        if(gMode == MODE_RGB) {
+    for (auto& btn : rgbPresetWidgets) {
+        if (gMode == MODE_RGB) {
             btn.setCss("visibility", "");
         } else {
             btn.setCss("visibility", "hidden");
@@ -250,14 +248,14 @@ static void scheduleNvsSave() {
 }
 
 static void onModeChanged(Checkbox& checkedCb) {
-    for(size_t i = 0; i < modeCheckboxes.size(); ++i) {
+    for (size_t i = 0; i < modeCheckboxes.size(); ++i) {
         auto cb = modeCheckboxes[i];
-        if(cb->uuid() == checkedCb.uuid()) {
+        if (cb->uuid() == checkedCb.uuid()) {
             gMode = (Mode)i;
             displayWidgetsForMode();
             ESP_ERROR_CHECK(nvs_set_u8(gNvs, "mode", i));
             scheduleNvsSave();
-            if(!cb->checked()) {
+            if (!cb->checked()) {
                 cb->setChecked(true);
             }
         } else {
@@ -268,11 +266,11 @@ static void onModeChanged(Checkbox& checkedCb) {
 
 static void onSubChanged(Checkbox& checkedCb) {
     gSub = SUB_NONE;
-    for(size_t i = 0; i < subCheckboxes.size(); ++i) {
+    for (size_t i = 0; i < subCheckboxes.size(); ++i) {
         auto cb = subCheckboxes[i];
-        if(cb->checked()) {
-            if(cb->uuid() == checkedCb.uuid()) {
-                gSub = (SubMode)(i+1);
+        if (cb->checked()) {
+            if (cb->uuid() == checkedCb.uuid()) {
+                gSub = (SubMode)(i + 1);
             } else {
                 cb->setChecked(false);
             }
@@ -294,9 +292,9 @@ static void buildColorPresets(builder::_LayoutBuilder builder) {
     float x = 0.5f;
     const float y = 4;
     const float btnHeight = 0.5f;
-    const float btnWidth = ((layoutWidth - (float(COLOR_PRESETS.size()-1)*0.5f)) / COLOR_PRESETS.size());
-    
-    for(const auto& preset : COLOR_PRESETS) {
+    const float btnWidth = ((layoutWidth - (float(COLOR_PRESETS.size() - 1) * 0.5f)) / COLOR_PRESETS.size());
+
+    for (const auto& preset : COLOR_PRESETS) {
         auto& btn = UI.button(x, y, btnWidth, btnHeight);
         btn.text(preset.name);
 
@@ -312,11 +310,11 @@ static void buildColorPresets(builder::_LayoutBuilder builder) {
     }
 }
 
-static void buildSavedCheckbox(builder::Checkbox& cb, const char *valueName, bool defaultValue) {
+static void buildSavedCheckbox(builder::Checkbox& cb, const char* valueName, bool defaultValue) {
     uint8_t enable = defaultValue ? 1 : 0;
     nvs_get_u8(gNvs, valueName, &enable);
     cb.checked(enable);
-    cb.onChanged([=](Checkbox &b) {
+    cb.onChanged([=](Checkbox& b) {
         ESP_ERROR_CHECK(nvs_set_u8(gNvs, valueName, b.checked()));
         scheduleNvsSave();
     });
@@ -329,8 +327,8 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
         &builder.modeHsv,
         &builder.modeRainbow,
     };
-    for(int i = 0; i < modeSwitchers.size(); ++i) {
-        auto *sw = modeSwitchers[i];
+    for (int i = 0; i < modeSwitchers.size(); ++i) {
+        auto* sw = modeSwitchers[i];
         sw->checked(i == gMode);
         sw->onChanged(onModeChanged);
     }
@@ -339,13 +337,13 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
         &builder.subBreathe,
         &builder.subWave,
     };
-    for(int i = 0; i < subSwitchers.size(); ++i) {
-        auto *sw = subSwitchers[i];
-        sw->checked(i+1 == gSub);
+    for (int i = 0; i < subSwitchers.size(); ++i) {
+        auto* sw = subSwitchers[i];
+        sw->checked(i + 1 == gSub);
         sw->onChanged(onSubChanged);
     }
 
-    for(auto slider : slidersToSaveBuilder(builder)) {
+    for (auto slider : slidersToSaveBuilder(builder)) {
         slider->onChanged(onSaveSliderChanged);
     }
 
@@ -360,65 +358,65 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
     displayWidgetsForMode();
 
     // Load saved slider values
-    for(auto s : slidersToSave) {
+    for (auto s : slidersToSave) {
         snprintf(buff, sizeof(buff), "s%x", s->uuid());
         int32_t value = s->value();
-        if(nvs_get_i32(gNvs, buff, &value) == ESP_OK) {
+        if (nvs_get_i32(gNvs, buff, &value) == ESP_OK) {
             s->setValue(value);
         }
     }
 }
 
 static TickType_t applySub(Apa102& leds) {
-    switch(gSub) {
-        case SUB_BREATHE: {
-            static float mult = 0.5f;
-            static float delta = 0.005f;
+    switch (gSub) {
+    case SUB_BREATHE: {
+        static float mult = 0.5f;
+        static float delta = 0.005f;
 
-            if(mult >= 1.f) {
-                delta = -0.005f;
-            } else if(mult <= 0.f) {
-                delta = 0.005f;
-            }
-            mult += delta;
-
-            const int16_t min = Layout.breatheMinBrightness.value();
-            int16_t curBrightness = min + (mult*mult)*(255 - min);
-            curBrightness = std::min(int16_t(255), std::max(int16_t(0), curBrightness));
-
-            auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
-            base.stretchChannelsEvenly(curBrightness);
-            for(int i = 0; i < LED_COUNT; ++i) {
-                leds[i] = base;
-            }
-            return pdMS_TO_TICKS(Layout.breatheDelay.value());
+        if (mult >= 1.f) {
+            delta = -0.005f;
+        } else if (mult <= 0.f) {
+            delta = 0.005f;
         }
-        case SUB_WAVE: {
-            static float offset = 0;
-            const float size = Layout.waveSize.value();
-            const float segment = size*2;
-            const int16_t min = Layout.waveMinBrightness.value();
-            const auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
-            for(int16_t i = 0; i < LED_COUNT; ++i) {
-                float posInSegment = std::fmod((float(i) + offset), segment) / size;
-                if(posInSegment > 1.f) {
-                    posInSegment = 2.f - posInSegment;
-                }
+        mult += delta;
 
-                int16_t cur = min + (posInSegment*posInSegment)*(255 - min);
-                cur = std::min(int16_t(255), std::max(int16_t(0), cur));
+        const int16_t min = Layout.breatheMinBrightness.value();
+        int16_t curBrightness = min + (mult * mult) * (255 - min);
+        curBrightness = std::min(int16_t(255), std::max(int16_t(0), curBrightness));
 
-                auto curRgb = base;
-                curRgb.stretchChannelsEvenly(cur);
-                leds[i] = curRgb;
-            }
-
-            offset += 0.01;
-            if(offset >= segment) {
-                offset = 0;
-            }
-            return pdMS_TO_TICKS(Layout.waveDelay.value()/100);
+        auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
+        base.stretchChannelsEvenly(curBrightness);
+        for (int i = 0; i < LED_COUNT; ++i) {
+            leds[i] = base;
         }
+        return pdMS_TO_TICKS(Layout.breatheDelay.value());
+    }
+    case SUB_WAVE: {
+        static float offset = 0;
+        const float size = Layout.waveSize.value();
+        const float segment = size * 2;
+        const int16_t min = Layout.waveMinBrightness.value();
+        const auto base = Rgb(leds[0].r, leds[0].g, leds[0].b);
+        for (int16_t i = 0; i < LED_COUNT; ++i) {
+            float posInSegment = std::fmod((float(i) + offset), segment) / size;
+            if (posInSegment > 1.f) {
+                posInSegment = 2.f - posInSegment;
+            }
+
+            int16_t cur = min + (posInSegment * posInSegment) * (255 - min);
+            cur = std::min(int16_t(255), std::max(int16_t(0), cur));
+
+            auto curRgb = base;
+            curRgb.stretchChannelsEvenly(cur);
+            leds[i] = curRgb;
+        }
+
+        offset += 0.01;
+        if (offset >= segment) {
+            offset = 0;
+        }
+        return pdMS_TO_TICKS(Layout.waveDelay.value() / 100);
+    }
     default:
         return pdMS_TO_TICKS(100);
     }
@@ -430,52 +428,51 @@ static bool applyStartupAnim(Apa102& leds) {
     TickType_t now = xTaskGetTickCount();
 
     const float c = float(now - start) / duration;
-    if(c >= 1.f) {
+    if (c >= 1.f) {
         return false;
     }
 
     float posC;
 
-    static const constexpr size_t OFF_BACK_LEFT = CNT_FRONT+CNT_BACK_LEFT;
-    static const constexpr size_t OFF_BACK_BOTTOM = OFF_BACK_LEFT+CNT_BACK_BOTTOM;
-    static const constexpr size_t OFF_BACK_RIGHT = OFF_BACK_BOTTOM+CNT_BACK_RIGHT;
+    static const constexpr size_t OFF_BACK_LEFT = CNT_FRONT + CNT_BACK_LEFT;
+    static const constexpr size_t OFF_BACK_BOTTOM = OFF_BACK_LEFT + CNT_BACK_BOTTOM;
+    static const constexpr size_t OFF_BACK_RIGHT = OFF_BACK_BOTTOM + CNT_BACK_RIGHT;
 
-    for(size_t i = 0; i < LED_COUNT; ++i) {
-        if(i <= CNT_FRONT_BOTTOM/2) {
-            posC = float(i)/(CNT_FRONT_BOTTOM/2);
-        } else if(i < CNT_FRONT_BOTTOM) {
-            posC = float(CNT_FRONT_BOTTOM-i)/(CNT_FRONT_BOTTOM/2);
-        } else if(i < CNT_FRONT_BOTTOM+CNT_FRONT_TOP/2) {
-            posC = float(i-CNT_FRONT_BOTTOM)/(CNT_FRONT_TOP/2);
-        } else if(i < CNT_FRONT) {
-            posC = float(CNT_FRONT_TOP - (i-CNT_FRONT_BOTTOM))/(CNT_FRONT_TOP/2);
-        } else if(i < OFF_BACK_LEFT) {
+    for (size_t i = 0; i < LED_COUNT; ++i) {
+        if (i <= CNT_FRONT_BOTTOM / 2) {
+            posC = float(i) / (CNT_FRONT_BOTTOM / 2);
+        } else if (i < CNT_FRONT_BOTTOM) {
+            posC = float(CNT_FRONT_BOTTOM - i) / (CNT_FRONT_BOTTOM / 2);
+        } else if (i < CNT_FRONT_BOTTOM + CNT_FRONT_TOP / 2) {
+            posC = float(i - CNT_FRONT_BOTTOM) / (CNT_FRONT_TOP / 2);
+        } else if (i < CNT_FRONT) {
+            posC = float(CNT_FRONT_TOP - (i - CNT_FRONT_BOTTOM)) / (CNT_FRONT_TOP / 2);
+        } else if (i < OFF_BACK_LEFT) {
             posC = 0.f;
-        } else if(i <= OFF_BACK_LEFT+CNT_BACK_BOTTOM/2) {
-            posC = float(i-OFF_BACK_LEFT)/(CNT_BACK_BOTTOM/2);
-        } else if(i < OFF_BACK_LEFT+CNT_BACK_BOTTOM) {
-            posC = float(CNT_BACK_BOTTOM - (i-OFF_BACK_LEFT))/(CNT_BACK_BOTTOM/2);
-        } else if(i < OFF_BACK_BOTTOM+CNT_BACK_RIGHT) {
+        } else if (i <= OFF_BACK_LEFT + CNT_BACK_BOTTOM / 2) {
+            posC = float(i - OFF_BACK_LEFT) / (CNT_BACK_BOTTOM / 2);
+        } else if (i < OFF_BACK_LEFT + CNT_BACK_BOTTOM) {
+            posC = float(CNT_BACK_BOTTOM - (i - OFF_BACK_LEFT)) / (CNT_BACK_BOTTOM / 2);
+        } else if (i < OFF_BACK_BOTTOM + CNT_BACK_RIGHT) {
             posC = 0.f;
-        } else if(i <= OFF_BACK_RIGHT+CNT_BACK_TOP/2) {
-            posC = float(i-OFF_BACK_RIGHT)/(CNT_BACK_TOP/2);
-        } else if(i < OFF_BACK_RIGHT+CNT_BACK_TOP) {
-            posC = float(CNT_BACK_TOP - (i-OFF_BACK_RIGHT))/(CNT_BACK_TOP/2);
+        } else if (i <= OFF_BACK_RIGHT + CNT_BACK_TOP / 2) {
+            posC = float(i - OFF_BACK_RIGHT) / (CNT_BACK_TOP / 2);
+        } else if (i < OFF_BACK_RIGHT + CNT_BACK_TOP) {
+            posC = float(CNT_BACK_TOP - (i - OFF_BACK_RIGHT)) / (CNT_BACK_TOP / 2);
         }
 
-        const int cur = ((posC - 1) + c*2) * 255;
+        const int cur = ((posC - 1) + c * 2) * 255;
         stretchChannelsEvenly(leds[i], std::max(0, std::min(255, cur)));
     }
     return true;
 }
 
-static void wifiConnectTask(void *) {
+static void wifiConnectTask(void*) {
     rb::WiFi::connect(WIFI_NAME, WIFI_PASS);
     vTaskDelete(NULL);
 }
 
-extern "C" void app_main(void)
-{
+extern "C" void app_main(void) {
     Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 2'000'000);
 
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -491,21 +488,21 @@ extern "C" void app_main(void)
     xTaskCreatePinnedToCore(wifiConnectTask, "", 4096, NULL, 1, NULL, 1);
 
     const Apa102::ApaRgb rgbOff;
-    
-    auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
+
+    auto* previous_data = new Apa102::ApaRgb[LED_COUNT];
 
     float rainbowOffset = 0;
     bool wait_for_show = true;
     bool startup_done = false;
 
-    while(true) {
+    while (true) {
         const uint8_t brightness = 0xE0 | uint8_t(Layout.brightness.value());
 
         TickType_t delay = 0;
-        switch(gMode) {
+        switch (gMode) {
         case MODE_RGB: {
             const Rgb clr(Layout.rgbR.value(), Layout.rgbG.value(), Layout.rgbB.value());
-            for(int i = 0; i < LED_COUNT; ++i) {
+            for (int i = 0; i < LED_COUNT; ++i) {
                 leds[i].v = brightness;
                 leds[i] = clr;
             }
@@ -514,7 +511,7 @@ extern "C" void app_main(void)
         }
         case MODE_HSV: {
             const Hsv clr(Layout.hsvH.value(), Layout.hsvS.value(), Layout.hsvV.value());
-            for(int i = 0; i < LED_COUNT; ++i) {
+            for (int i = 0; i < LED_COUNT; ++i) {
                 leds[i].v = brightness;
                 leds[i] = clr;
             }
@@ -524,42 +521,41 @@ extern "C" void app_main(void)
         case MODE_RAINBOW: {
             const int step = Layout.rainbowLength.value();
             const bool yellowOnly = Layout.rainboxModeYellow.checked();
-            for(int i = 0; i < LED_COUNT; ++i) {
+            for (int i = 0; i < LED_COUNT; ++i) {
                 leds[i].v = brightness;
 
-                uint8_t h = rainbowOffset + i*step;
+                uint8_t h = rainbowOffset + i * step;
 
-                if(yellowOnly) {
-                    if(h <= 127) {
-                        h = (float(h)/127)*38 - 3;
+                if (yellowOnly) {
+                    if (h <= 127) {
+                        h = (float(h) / 127) * 38 - 3;
                     } else {
-                        h = (1-(float(h-128)/127))*38 - 3;
+                        h = (1 - (float(h - 128) / 127)) * 38 - 3;
                     }
                 }
                 hsv2rgb_rainbow(Hsv(h, 255, 255), leds[i]);
             }
-            rainbowOffset += float(step)/100.f;
-            if(rainbowOffset >= 255.f) {
+            rainbowOffset += float(step) / 100.f;
+            if (rainbowOffset >= 255.f) {
                 rainbowOffset = 0.f;
             }
-            delay = pdMS_TO_TICKS(Layout.rainbowSpeed.value()/100.f);
+            delay = pdMS_TO_TICKS(Layout.rainbowSpeed.value() / 100.f);
             break;
         }
         default:
             break;
         }
 
-        
-        if(!Layout.enableFront.checked()) {
+        if (!Layout.enableFront.checked()) {
             std::fill_n((uint32_t*)&leds[0], CNT_FRONT, *((uint32_t*)&rgbOff));
         }
-        if(!Layout.enableBack.checked()) {
+        if (!Layout.enableBack.checked()) {
             std::fill_n((uint32_t*)&leds[CNT_FRONT], CNT_BACK, *((uint32_t*)&rgbOff));
         }
 
-        if(!startup_done) {
-            if(applyStartupAnim(leds)) {
-                if(delay > pdMS_TO_TICKS(50)) {
+        if (!startup_done) {
+            if (applyStartupAnim(leds)) {
+                if (delay > pdMS_TO_TICKS(50)) {
                     delay = pdMS_TO_TICKS(50);
                 }
             } else {
@@ -568,26 +564,26 @@ extern "C" void app_main(void)
         }
 
         auto start = xTaskGetTickCount();
-        if(wait_for_show) {
+        if (wait_for_show) {
             leds.wait();
             wait_for_show = false;
         }
 
         auto waitDuration = xTaskGetTickCount() - start;
-        if(waitDuration < delay) {
+        if (waitDuration < delay) {
             delay -= waitDuration;
         } else {
             delay = 0;
         }
         vTaskDelay(delay);
 
-        if(memcmp(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb)) != 0) {
-            memcpy(previous_data, &leds[0], LED_COUNT*sizeof(Apa102::ApaRgb));
+        if (memcmp(previous_data, &leds[0], LED_COUNT * sizeof(Apa102::ApaRgb)) != 0) {
+            memcpy(previous_data, &leds[0], LED_COUNT * sizeof(Apa102::ApaRgb));
             leds.show();
             wait_for_show = true;
         }
 
-        if(gNvsNextSave != 0 && xTaskGetTickCount() > gNvsNextSave) {
+        if (gNvsNextSave != 0 && xTaskGetTickCount() > gNvsNextSave) {
             nvs_commit(gNvs);
             gNvsNextSave = 0;
         }
