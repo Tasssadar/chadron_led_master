@@ -104,6 +104,7 @@ static Widget* const widgetsModeRainbow[] = {
     &Layout.rainbowLength,
     &Layout.rainbowLengthTit,
     &Layout.rainbowSpeedTit,
+    &Layout.rainboxModeYellow,
     nullptr,
 };
 
@@ -311,6 +312,16 @@ static void buildColorPresets(builder::_LayoutBuilder builder) {
     }
 }
 
+static void buildSavedCheckbox(builder::Checkbox& cb, const char *valueName, bool defaultValue) {
+    uint8_t enable = defaultValue ? 1 : 0;
+    nvs_get_u8(gNvs, valueName, &enable);
+    cb.checked(enable);
+    cb.onChanged([=](Checkbox &b) {
+        ESP_ERROR_CHECK(nvs_set_u8(gNvs, valueName, b.checked()));
+        scheduleNvsSave();
+    });
+}
+
 static void buildWidgets(builder::_LayoutBuilder builder) {
     char buff[8];
     std::array modeSwitchers {
@@ -338,22 +349,10 @@ static void buildWidgets(builder::_LayoutBuilder builder) {
         slider->onChanged(onSaveSliderChanged);
     }
 
-    uint8_t enable = 1;
-    nvs_get_u8(gNvs, "eb", &enable);
-    builder.enableBack.checked(enable);
-    builder.enableBack.onChanged([](Checkbox &b) {
-        ESP_ERROR_CHECK(nvs_set_u8(gNvs, "eb", b.checked()));
-        scheduleNvsSave();
-    });
+    buildSavedCheckbox(builder.enableBack, "eb", true);
+    buildSavedCheckbox(builder.enableFront, "ef", true);
+    buildSavedCheckbox(builder.rainboxModeYellow, "rnYel", false);
 
-    enable = 1;
-    nvs_get_u8(gNvs, "ef", &enable);
-    builder.enableFront.checked(enable);
-    builder.enableFront.onChanged([](Checkbox &b) {
-        ESP_ERROR_CHECK(nvs_set_u8(gNvs, "ef", b.checked()));
-        scheduleNvsSave();
-    });
-    
     buildColorPresets(builder);
 
     builder.commit();
@@ -478,10 +477,6 @@ static void wifiConnectTask(void *) {
 extern "C" void app_main(void)
 {
     Apa102 leds(LED_COUNT, PIN_CLK, PIN_DATA, DoubleBuffer, 2'000'000);
-    /*for(size_t i = 0; i < LED_COUNT; ++i) {
-        leds[i] = Apa102::ApaRgb();
-    }
-    leds.show();*/
 
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(nvs_open("chadron", NVS_READWRITE, &gNvs));
@@ -495,10 +490,14 @@ extern "C" void app_main(void)
 
     xTaskCreatePinnedToCore(wifiConnectTask, "", 4096, NULL, 1, NULL, 1);
 
-    float rainbowOffset = 0;
+    const Apa102::ApaRgb rgbOff;
+    
     auto *previous_data = new Apa102::ApaRgb[LED_COUNT];
+
+    float rainbowOffset = 0;
     bool wait_for_show = true;
     bool startup_done = false;
+
     while(true) {
         const uint8_t brightness = 0xE0 | uint8_t(Layout.brightness.value());
 
@@ -524,9 +523,20 @@ extern "C" void app_main(void)
         }
         case MODE_RAINBOW: {
             const int step = Layout.rainbowLength.value();
+            const bool yellowOnly = Layout.rainboxModeYellow.checked();
             for(int i = 0; i < LED_COUNT; ++i) {
                 leds[i].v = brightness;
-                hsv2rgb_rainbow(Hsv(rainbowOffset + i*step, 255, 255), leds[i]);
+
+                uint8_t h = rainbowOffset + i*step;
+
+                if(yellowOnly) {
+                    if(h <= 127) {
+                        h = (float(h)/127)*38 - 3;
+                    } else {
+                        h = (1-(float(h-128)/127))*38 - 3;
+                    }
+                }
+                hsv2rgb_rainbow(Hsv(h, 255, 255), leds[i]);
             }
             rainbowOffset += float(step)/100.f;
             if(rainbowOffset >= 255.f) {
@@ -539,15 +549,12 @@ extern "C" void app_main(void)
             break;
         }
 
+        
         if(!Layout.enableFront.checked()) {
-            for(size_t i = 0; i < CNT_FRONT; ++i) {
-                leds[i] = Apa102::ApaRgb();
-            }
+            std::fill_n((uint32_t*)&leds[0], CNT_FRONT, *((uint32_t*)&rgbOff));
         }
         if(!Layout.enableBack.checked()) {
-            for(size_t i = CNT_FRONT; i < CNT_FRONT+CNT_BACK; ++i) {
-                leds[i] = Apa102::ApaRgb();
-            }
+            std::fill_n((uint32_t*)&leds[CNT_FRONT], CNT_BACK, *((uint32_t*)&rgbOff));
         }
 
         if(!startup_done) {
