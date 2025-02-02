@@ -528,9 +528,9 @@ extern "C" void app_main(void) {
 
                 if (yellowOnly) {
                     if (h <= 127) {
-                        h = (float(h) / 127) * 38 - 3;
+                        h = (float(h) / 127) * 35;
                     } else {
-                        h = (1 - (float(h - 128) / 127)) * 38 - 3;
+                        h = (1 - (float(h - 128) / 127)) * 35;
                     }
                 }
                 hsv2rgb_rainbow(Hsv(h, 255, 255), leds[i]);
